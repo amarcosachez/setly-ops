@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setly — Plan Comparator</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --brand:#EFF483;--pink:#FF3D9A;--violet:#C9B8FF;--ink:#1A1A1A;--muted:rgba(26,26,26,0.45);--border:rgba(26,26,26,0.08);--surface:#F7F7F5;--white:#FFFFFF;--green:#00C48C; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--surface);font-family:'Plus Jakarta Sans',sans-serif;color:var(--ink);min-height:100vh}
+  .topbar{background:var(--ink);padding:0 32px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+  .logo{font-family:'Fredoka',sans-serif;font-size:22px;font-weight:700;color:var(--brand)}.logo span{color:var(--pink)}
+  .tag{font-size:11px;font-weight:600;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px}
+  .back-btn{background:rgba(255,255,255,0.08);border:none;color:rgba(255,255,255,0.6);font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:600;padding:7px 14px;border-radius:8px;cursor:pointer;transition:all 0.2s;text-decoration:none}
+  .back-btn:hover{background:rgba(255,255,255,0.15);color:white}
+  .layout{display:grid;grid-template-columns:380px 1fr;gap:24px;padding:28px 32px;max-width:1440px;margin:0 auto;align-items:start}
+  .panel{background:var(--white);border-radius:20px;border:1px solid var(--border);overflow:hidden;margin-bottom:16px}
+  .panel-hd{padding:14px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+  .panel-hd-icon{font-size:18px}.panel-hd-title{font-family:'Fredoka',sans-serif;font-size:16px;font-weight:700;color:var(--ink)}
+  .panel-hd-sub{font-size:11px;color:var(--muted);margin-left:auto}
+  .panel-body{padding:18px 20px}
+  .user-card{background:var(--ink);border-radius:14px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+  .avatar{width:38px;height:38px;border-radius:50%;background:var(--pink);display:flex;align-items:center;justify-content:center;font-family:'Fredoka',sans-serif;font-size:15px;font-weight:700;color:white;flex-shrink:0}
+  .user-name{font-size:14px;font-weight:700;color:white}.user-meta{font-size:12px;color:rgba(255,255,255,0.4)}
+  .field{margin-bottom:12px}
+  .field label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;display:block;margin-bottom:5px}
+  .field input,.field select{width:100%;padding:9px 13px;border:1.5px solid var(--border);border-radius:10px;font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;color:var(--ink);outline:none;transition:border-color 0.2s;background:white}
+  .field input:focus,.field select:focus{border-color:var(--pink)}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.7px;margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .current-cost-box{background:var(--ink);border-radius:14px;padding:16px 18px;margin-top:12px;text-align:center}
+  .current-cost-label{font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:4px}
+  .current-cost-value{font-family:'Fredoka',sans-serif;font-size:36px;font-weight:700;color:var(--brand);line-height:1}
+  .current-cost-sub{font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px}
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all 0.2s}
+  .toggle-row:hover{border-color:var(--ink)}.toggle-row.on{border-color:var(--pink);background:rgba(255,61,154,0.04)}
+  .toggle-left{display:flex;align-items:center;gap:9px}.toggle-icon{font-size:16px}
+  .toggle-label{font-size:13px;font-weight:600}.toggle-sub{font-size:11px;color:var(--muted)}
+  .toggle-switch{width:36px;height:20px;border-radius:10px;background:var(--border);position:relative;transition:background 0.2s;flex-shrink:0}
+  .toggle-switch::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:white;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)}
+  .toggle-row.on .toggle-switch{background:var(--pink)}.toggle-row.on .toggle-switch::after{transform:translateX(16px)}
+  .compare-btn{width:100%;padding:14px;background:var(--pink);color:white;border:none;border-radius:14px;font-family:'Fredoka',sans-serif;font-size:18px;font-weight:700;cursor:pointer;transition:all 0.2s}
+  .compare-btn:hover{background:#e0357f;transform:translateY(-1px)}
+  .results-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .results-title{font-family:'Fredoka',sans-serif;font-size:22px;font-weight:700}
+  .results-meta{font-size:12px;color:var(--muted)}
+  .plan-card{background:var(--white);border:1.5px solid var(--border);border-radius:20px;padding:22px 24px;margin-bottom:14px;position:relative;transition:all 0.2s}
+  .plan-card:hover{box-shadow:0 4px 24px rgba(0,0,0,0.07);border-color:rgba(26,26,26,0.15)}
+  .plan-card.best{border-color:var(--green);background:#f0fff8}.plan-card.second{border-color:var(--violet);background:#faf8ff}
+  .rank-badge{position:absolute;top:-11px;left:20px;font-size:11px;font-weight:700;padding:3px 12px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px}
+  .rank-1{background:var(--green);color:white}.rank-2{background:var(--violet);color:#4a3a8a}.rank-3{background:var(--brand);color:#6b7200}
+  .plan-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+  .plan-retailer{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:3px}
+  .plan-name{font-size:17px;font-weight:700;color:var(--ink)}
+  .plan-type-tag{display:inline-block;margin-top:5px;padding:2px 9px;background:rgba(201,184,255,0.25);color:#6b52d1;border-radius:20px;font-size:11px;font-weight:600}
+  .saving-block{text-align:right}
+  .saving-amount{font-family:'Fredoka',sans-serif;font-size:32px;font-weight:700;line-height:1}
+  .saving-positive{color:var(--green)}.saving-negative{color:var(--pink)}
+  .saving-label{font-size:11px;color:var(--muted);margin-top:2px}.plan-annual{font-size:13px;color:var(--muted);margin-top:4px}
+  .rate-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+  .rate-box{background:var(--surface);border-radius:10px;padding:10px 12px}
+  .rate-box-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px}
+  .rate-box-value{font-size:14px;font-weight:700;color:var(--ink)}.rate-box-vs{font-size:10px;margin-top:2px}
+  .rate-better{color:var(--green)}.rate-worse{color:var(--pink)}
+  .offer-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .offer-tag{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+  .tag-ev{background:rgba(0,196,140,0.12);color:#007a58}.tag-solar{background:rgba(239,244,131,0.5);color:#6b7200}
+  .tag-wfh{background:rgba(255,61,154,0.1);color:var(--pink)}.tag-contract{background:rgba(26,26,26,0.06);color:var(--muted)}
+  .tag-promo{background:rgba(255,61,154,0.15);color:var(--pink)}
+  .plan-actions{display:flex;gap:8px;padding-top:14px;border-top:1px solid var(--border)}
+  .btn-select{flex:1;padding:10px;background:var(--ink);color:var(--brand);border:none;border-radius:10px;font-family:'Fredoka',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all 0.2s}
+  .btn-select:hover{background:#2d2d2d}.btn-select.selected{background:var(--green);color:white}
+  .btn-view{padding:10px 16px;background:var(--surface);color:var(--ink);border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;display:flex;align-items:center;transition:all 0.2s}
+  .btn-view:hover{border-color:var(--ink)}
+  .empty{text-align:center;padding:60px 20px;color:var(--muted)}.empty-icon{font-size:48px;margin-bottom:12px}.empty p{font-size:14px;line-height:1.6}
+  .disclaimer{font-size:11px;color:var(--muted);line-height:1.5;padding:10px 14px;background:rgba(239,244,131,0.2);border-radius:10px;border:1px solid rgba(239,244,131,0.5);margin-bottom:14px}
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--ink);color:var(--brand);font-family:'Fredoka',sans-serif;font-size:16px;font-weight:600;padding:14px 22px;border-radius:14px;z-index:300;transform:translateY(80px);opacity:0;transition:all 0.3s cubic-bezier(.4,0,.2,1);pointer-events:none}
+  .toast.show{transform:translateY(0);opacity:1}
+  .selected-summary{background:var(--green);border-radius:16px;padding:16px 20px;margin-bottom:16px;display:none}
+  .selected-summary.show{display:block}
+  .selected-summary-title{font-family:'Fredoka',sans-serif;font-size:16px;font-weight:700;color:white;margin-bottom:4px}
+  .selected-summary-detail{font-size:12px;color:rgba(255,255,255,0.8)}
+  @media(max-width:960px){.layout{grid-template-columns:1fr}.rate-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="logo">Set<span>ly</span></div>
+    <div class="tag">Plan Comparator</div>
+  </div>
+  <a class="back-btn" href="javascript:history.back()">← Dashboard</a>
+</div>
+
+<div class="layout">
+  <div>
+    <div id="userCard"></div>
+
+    <div class="panel">
+      <div class="panel-hd"><div class="panel-hd-icon">📄</div><div class="panel-hd-title">Current plan (from bill)</div><div class="panel-hd-sub">What they pay now</div></div>
+      <div class="panel-body">
+        <div class="field-row">
+          <div class="field"><label>State</label><select id="stateSelect" onchange="updateCurrentCost()"><option value="">Select...</option><option>NSW</option><option>VIC</option><option>QLD</option><option>SA</option><option>ACT</option><option>TAS</option></select></div>
+          <div class="field"><label>Tariff type</label><select id="tariffType" onchange="toggleTariffFields()"><option value="flat">Flat rate</option><option value="tou">Time of use</option></select></div>
+        </div>
+        <div class="field"><label>Current retailer</label><input type="text" id="currentRetailer" placeholder="e.g. AGL" oninput="updateCurrentCost()"/></div>
+
+        <div id="flatFields">
+          <div class="section-label">Flat rate</div>
+          <div class="field"><label>Usage rate (c/kWh)</label><input type="number" id="flatRate" placeholder="e.g. 28.5" step="0.01" oninput="updateCurrentCost()"/></div>
+        </div>
+
+        <div id="touFields" style="display:none;">
+          <div class="section-label">Time-of-use rates</div>
+          <div class="field-row">
+            <div class="field"><label>Peak (c/kWh)</label><input type="number" id="touPeakRate" placeholder="e.g. 42.0" step="0.01" oninput="updateCurrentCost()"/></div>
+            <div class="field"><label>Off-peak (c/kWh)</label><input type="number" id="touOffPeakRate" placeholder="e.g. 16.5" step="0.01" oninput="updateCurrentCost()"/></div>
+          </div>
+          <div class="field"><label>Shoulder (c/kWh)</label><input type="number" id="touShoulderRate" placeholder="e.g. 22.0" step="0.01" oninput="updateCurrentCost()"/></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd"><div class="panel-hd-icon">⚡</div><div class="panel-hd-title">Actual usage (3 bills)</div></div>
+      <div class="panel-body">
+        <div id="flatUsage">
+          <div class="section-label">kWh + supply charge per bill</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Find the daily supply charge on your bill under "Supply charge · Daily".</div>
+          <div class="field-row"><div class="field"><label>Bill 1 kWh</label><input type="number" id="b1k" placeholder="e.g. 420" oninput="updateCurrentCost()"/></div><div class="field"><label>Bill 1 days</label><input type="number" id="b1d" placeholder="e.g. 90" oninput="updateCurrentCost()"/></div></div>
+          <div class="field"><label>Bill 1 daily supply charge ($/day)</label><input type="number" id="b1s" placeholder="e.g. 0.9786" step="0.0001" oninput="updateCurrentCost()"/></div>
+
+          <div class="field-row" style="margin-top:8px;"><div class="field"><label>Bill 2 kWh</label><input type="number" id="b2k" placeholder="e.g. 380" oninput="updateCurrentCost()"/></div><div class="field"><label>Bill 2 days</label><input type="number" id="b2d" placeholder="e.g. 92" oninput="updateCurrentCost()"/></div></div>
+          <div class="field"><label>Bill 2 daily supply charge ($/day)</label><input type="number" id="b2s" placeholder="e.g. 0.9786" step="0.0001" oninput="updateCurrentCost()"/></div>
+
+          <div class="field-row" style="margin-top:8px;"><div class="field"><label>Bill 3 kWh</label><input type="number" id="b3k" placeholder="e.g. 510" oninput="updateCurrentCost()"/></div><div class="field"><label>Bill 3 days</label><input type="number" id="b3d" placeholder="e.g. 88" oninput="updateCurrentCost()"/></div></div>
+          <div class="field"><label>Bill 3 daily supply charge ($/day)</label><input type="number" id="b3s" placeholder="e.g. 0.9786" step="0.0001" oninput="updateCurrentCost()"/></div>
+        </div>
+
+        <div id="touUsage" style="display:none;">
+          <div class="section-label">kWh by time slot — per bill</div>
+
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin:8px 0 6px;">Bill 1 (most recent)</div>
+          <div class="field-row"><div class="field"><label>Peak kWh</label><input type="number" id="b1Peak" placeholder="e.g. 130" oninput="updateCurrentCost()"/></div><div class="field"><label>Off-peak kWh</label><input type="number" id="b1OffPeak" placeholder="e.g. 280" oninput="updateCurrentCost()"/></div></div>
+          <div class="field-row"><div class="field"><label>Shoulder kWh</label><input type="number" id="b1Shoulder" placeholder="e.g. 80" oninput="updateCurrentCost()"/></div><div class="field"><label>Days</label><input type="number" id="b1DTou" placeholder="e.g. 90" oninput="updateCurrentCost()"/></div></div>
+
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin:12px 0 6px;">Bill 2</div>
+          <div class="field-row"><div class="field"><label>Peak kWh</label><input type="number" id="b2Peak" placeholder="e.g. 120" oninput="updateCurrentCost()"/></div><div class="field"><label>Off-peak kWh</label><input type="number" id="b2OffPeak" placeholder="e.g. 260" oninput="updateCurrentCost()"/></div></div>
+          <div class="field-row"><div class="field"><label>Shoulder kWh</label><input type="number" id="b2Shoulder" placeholder="e.g. 70" oninput="updateCurrentCost()"/></div><div class="field"><label>Days</label><input type="number" id="b2DTou" placeholder="e.g. 92" oninput="updateCurrentCost()"/></div></div>
+
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin:12px 0 6px;">Bill 3</div>
+          <div class="field-row"><div class="field"><label>Peak kWh</label><input type="number" id="b3Peak" placeholder="e.g. 140" oninput="updateCurrentCost()"/></div><div class="field"><label>Off-peak kWh</label><input type="number" id="b3OffPeak" placeholder="e.g. 310" oninput="updateCurrentCost()"/></div></div>
+          <div class="field-row"><div class="field"><label>Shoulder kWh</label><input type="number" id="b3Shoulder" placeholder="e.g. 90" oninput="updateCurrentCost()"/></div><div class="field"><label>Days</label><input type="number" id="b3DTou" placeholder="e.g. 88" oninput="updateCurrentCost()"/></div></div>
+
+          <div class="section-label" style="margin-top:14px;">Supply charge</div>
+          <div class="field"><label>Daily supply charge ($/day)</label><input type="number" id="supplyChargeTou" placeholder="e.g. 0.9786" step="0.0001" oninput="updateCurrentCost()"/></div>
+        </div>
+
+        <!-- Demand charge (optional) -->
+        <div style="margin-top:12px;padding:14px 16px;background:rgba(201,184,255,0.12);border-radius:12px;border:1px solid rgba(201,184,255,0.35);">
+          <div style="font-size:12px;font-weight:700;color:#6b52d1;margin-bottom:2px;">⚡ Demand charge <span style="font-weight:500;color:var(--muted);">(optional)</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Only some plans in VIC/QLD have this. It's the charge per kW of peak demand, usually labelled "[Month] Demand (normalised for 30 days)" on your bill. If your plan doesn't have it, leave blank.</div>
+          <div class="field-row">
+            <div class="field"><label>Demand rate ($/kW/day)</label><input type="number" id="demandRate" placeholder="e.g. 0.3849" step="0.0001" oninput="updateCurrentCost()"/></div>
+            <div class="field"><label>Peak demand total (kW, all bills)</label><input type="number" id="demandKw" placeholder="e.g. 4.64" step="0.01" oninput="updateCurrentCost()"/></div>
+          </div>
+        </div>
+        <div id="solarSection" style="display:none;margin-top:8px;">
+          <div class="section-label" style="color:#6b7200;">Solar export (total across 3 bills)</div>
+          <div class="field"><label>kWh exported to grid</label><input type="number" id="solarExportKwh" placeholder="e.g. 540" oninput="updateCurrentCost()"/></div>
+        </div>
+        <div class="current-cost-box" id="currentCostBox" style="display:none;">
+          <div class="current-cost-label">Current annual cost (est.)</div>
+          <div class="current-cost-value" id="currentCostValue">$—</div>
+          <div class="current-cost-sub" id="currentCostDaily"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd"><div class="panel-hd-icon">🏠</div><div class="panel-hd-title">Home profile</div></div>
+      <div class="panel-body">
+        <div class="toggle-row" id="tog-ev" onclick="toggleFlag('ev')"><div class="toggle-left"><div class="toggle-icon">🚗</div><div><div class="toggle-label">EV at home</div><div class="toggle-sub">Charges overnight</div></div></div><div class="toggle-switch"></div></div>
+        <div class="toggle-row" id="tog-solar" onclick="toggleFlag('solar')"><div class="toggle-left"><div class="toggle-icon">☀️</div><div><div class="toggle-label">Solar panels</div><div class="toggle-sub">Has feed-in</div></div></div><div class="toggle-switch"></div></div>
+        <div class="toggle-row" id="tog-wfh" onclick="toggleFlag('wfh')"><div class="toggle-left"><div class="toggle-icon">💻</div><div><div class="toggle-label">Works from home</div><div class="toggle-sub">High daytime usage</div></div></div><div class="toggle-switch"></div></div>
+      </div>
+    </div>
+
+    <button class="compare-btn" onclick="compare()">Find best plans ⚡</button>
+  </div>
+
+  <div>
+    <div id="selectedSummary" class="selected-summary"></div>
+    <div id="resultsPanel">
+      <div class="empty"><div class="empty-icon">⚡</div><p>Enter the user's current plan details and usage,<br>then click <strong>Find best plans</strong> to see real savings.</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const p = new URLSearchParams(window.location.search);
+const userName=p.get('name')||'';
+const userState=p.get('state')||'';
+const userPost=p.get('postcode')||'';
+
+if(userState) document.getElementById('stateSelect').value=userState;
+
+const flags={ev:p.get('ev')==='true',solar:p.get('solar')==='true',wfh:p.get('wfh')==='true'};
+['ev','solar','wfh'].forEach(f=>{if(flags[f])document.getElementById('tog-'+f).classList.add('on')});
+if(flags.solar)document.getElementById('solarSection').style.display='block';
+
+[['b1k','bill1Kwh'],['b1d','bill1Days'],['b2k','bill2Kwh'],['b2d','bill2Days'],['b3k','bill3Kwh'],['b3d','bill3Days']].forEach(([id,param])=>{const v=p.get(param);if(v)document.getElementById(id).value=v;});
+if(p.get('solarExportKwh'))document.getElementById('solarExportKwh').value=p.get('solarExportKwh');
+
+if(userName){
+  const initials=userName.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('userCard').innerHTML=`<div class="user-card" style="margin-bottom:16px;"><div class="avatar">${initials}</div><div><div class="user-name">${userName}</div><div class="user-meta">${userState||'—'} · ${userPost||'—'}</div></div></div>`;
+}
+
+toggleTariffFields();updateCurrentCost();
+
+function toggleTariffFields(){
+  const isTou=document.getElementById('tariffType').value==='tou';
+  document.getElementById('flatFields').style.display=isTou?'none':'block';
+  document.getElementById('touFields').style.display=isTou?'block':'none';
+  document.getElementById('flatUsage').style.display=isTou?'none':'block';
+  document.getElementById('touUsage').style.display=isTou?'block':'none';
+  updateCurrentCost();
+}
+
+function toggleFlag(f){
+  flags[f]=!flags[f];
+  document.getElementById('tog-'+f).classList.toggle('on',flags[f]);
+  if(f==='solar')document.getElementById('solarSection').style.display=flags.solar?'block':'none';
+  updateCurrentCost();
+}
+
+function getDailyKwh(){
+  const isTou=document.getElementById('tariffType').value==='tou';
+  if(isTou){
+    const totalKwh=
+      (parseFloat(document.getElementById('b1Peak').value)||0)+(parseFloat(document.getElementById('b1OffPeak').value)||0)+(parseFloat(document.getElementById('b1Shoulder').value)||0)+
+      (parseFloat(document.getElementById('b2Peak').value)||0)+(parseFloat(document.getElementById('b2OffPeak').value)||0)+(parseFloat(document.getElementById('b2Shoulder').value)||0)+
+      (parseFloat(document.getElementById('b3Peak').value)||0)+(parseFloat(document.getElementById('b3OffPeak').value)||0)+(parseFloat(document.getElementById('b3Shoulder').value)||0);
+    const totalDays=
+      (parseFloat(document.getElementById('b1DTou').value)||0)+
+      (parseFloat(document.getElementById('b2DTou').value)||0)+
+      (parseFloat(document.getElementById('b3DTou').value)||0);
+    return totalDays>0?totalKwh/totalDays:0;
+  }
+  const bills=[{k:parseFloat(document.getElementById('b1k').value)||0,d:parseFloat(document.getElementById('b1d').value)||0},{k:parseFloat(document.getElementById('b2k').value)||0,d:parseFloat(document.getElementById('b2d').value)||0},{k:parseFloat(document.getElementById('b3k').value)||0,d:parseFloat(document.getElementById('b3d').value)||0}].filter(b=>b.k>0&&b.d>0);
+  if(!bills.length)return 0;
+  return bills.reduce((s,b)=>s+b.k,0)/bills.reduce((s,b)=>s+b.d,0);
+}
+
+function getTotalDays(){
+  const isTou=document.getElementById('tariffType').value==='tou';
+  if(isTou)return(
+    (parseFloat(document.getElementById('b1DTou').value)||0)+
+    (parseFloat(document.getElementById('b2DTou').value)||0)+
+    (parseFloat(document.getElementById('b3DTou').value)||0))||270;
+  return[parseFloat(document.getElementById('b1d').value)||0,parseFloat(document.getElementById('b2d').value)||0,parseFloat(document.getElementById('b3d').value)||0].filter(d=>d>0).reduce((s,d)=>s+d,0)||270;
+}
+
+function calcCurrentCost(){
+  const isTou=document.getElementById('tariffType').value==='tou';
+  const dailyKwh=getDailyKwh();
+  if(dailyKwh<=0)return null;
+  const totalDays=getTotalDays();
+  const annualKwh=dailyKwh*365;
+  let usageCost;
+  if(isTou){
+    const scale=365/totalDays;
+    const peak=((parseFloat(document.getElementById('b1Peak').value)||0)+(parseFloat(document.getElementById('b2Peak').value)||0)+(parseFloat(document.getElementById('b3Peak').value)||0))*scale;
+    const off=((parseFloat(document.getElementById('b1OffPeak').value)||0)+(parseFloat(document.getElementById('b2OffPeak').value)||0)+(parseFloat(document.getElementById('b3OffPeak').value)||0))*scale;
+    const shou=((parseFloat(document.getElementById('b1Shoulder').value)||0)+(parseFloat(document.getElementById('b2Shoulder').value)||0)+(parseFloat(document.getElementById('b3Shoulder').value)||0))*scale;
+    const pRate=(parseFloat(document.getElementById('touPeakRate').value)||0)/100;
+    const oRate=(parseFloat(document.getElementById('touOffPeakRate').value)||0)/100;
+    const sRate=(parseFloat(document.getElementById('touShoulderRate').value)||parseFloat(document.getElementById('touPeakRate').value)||0)/100;
+    const supply=(parseFloat(document.getElementById('supplyChargeTou').value)||0)/100;
+    usageCost=(peak*pRate)+(off*oRate)+(shou*sRate)+(supply*365);
+  }else{
+    const rate=(parseFloat(document.getElementById('flatRate').value)||0)/100;
+    const supply=(parseFloat(document.getElementById('supplyCharge').value)||0)/100;
+    usageCost=(annualKwh*rate)+(supply*365);
+  }
+  const solarCredit=flags.solar?((parseFloat(document.getElementById('solarExportKwh').value)||0)*(365/totalDays)*0.07):0;
+  return Math.round(usageCost-solarCredit);
+}
+
+function updateCurrentCost(){
+  const cost=calcCurrentCost();
+  const box=document.getElementById('currentCostBox');
+  if(cost&&cost>0){
+    box.style.display='block';
+    document.getElementById('currentCostValue').textContent='$'+cost.toLocaleString();
+    document.getElementById('currentCostDaily').textContent='~$'+(cost/365).toFixed(2)+'/day · '+Math.round(getDailyKwh())+' kWh/day avg';
+  }else{box.style.display='none';}
+}
+
+const PLANS=[
+  {id:'agl-saver',retailer:'AGL',name:'Residential Saver',type:'flat',supplyCharge:0.9372,usageRate:0.2969,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.05,evRate:null,states:['NSW','VIC','QLD','SA'],tags:[],contractMonths:0,promo:null,url:'https://www.agl.com.au/residential/energy/electricity'},
+  {id:'agl-tou',retailer:'AGL',name:'Time Saver (ToU)',type:'tou',supplyCharge:0.9372,usageRate:null,peakRate:0.3980,offPeakRate:0.1650,shoulderRate:0.2200,fitRate:0.05,evRate:0.1200,states:['NSW','VIC','QLD','SA'],tags:['ev','wfh'],contractMonths:0,promo:null,url:'https://www.agl.com.au/residential/energy/electricity'},
+  {id:'origin-basic',retailer:'Origin Energy',name:'Basic Plan',type:'flat',supplyCharge:0.9200,usageRate:0.2890,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.05,evRate:null,states:['NSW','VIC','QLD','SA','ACT','TAS'],tags:[],contractMonths:0,promo:null,url:'https://www.originenergy.com.au'},
+  {id:'origin-solar',retailer:'Origin Energy',name:'Solar Boost',type:'flat',supplyCharge:0.9200,usageRate:0.2950,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.12,evRate:null,states:['NSW','VIC','QLD','SA','ACT'],tags:['solar'],contractMonths:0,promo:'High FiT',url:'https://www.originenergy.com.au/solar'},
+  {id:'ea-flexi',retailer:'EnergyAustralia',name:'Flexi Plan',type:'flat',supplyCharge:0.9700,usageRate:0.2780,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.06,evRate:null,states:['NSW','VIC','QLD','SA','ACT'],tags:[],contractMonths:12,promo:'12% disc.',url:'https://www.energyaustralia.com.au'},
+  {id:'ea-tou',retailer:'EnergyAustralia',name:'Total Plan Plus (ToU)',type:'tou',supplyCharge:0.9700,usageRate:null,peakRate:0.4200,offPeakRate:0.1550,shoulderRate:0.2100,fitRate:0.07,evRate:0.1100,states:['NSW','VIC','QLD','SA'],tags:['ev','wfh'],contractMonths:12,promo:null,url:'https://www.energyaustralia.com.au'},
+  {id:'red-energy',retailer:'Red Energy',name:'Living Energy Saver',type:'flat',supplyCharge:0.8800,usageRate:0.2720,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.07,evRate:null,states:['NSW','VIC','QLD','SA','ACT'],tags:['solar'],contractMonths:0,promo:null,url:'https://www.redenergy.com.au'},
+  {id:'amber',retailer:'Amber Electric',name:'Wholesale Rate',type:'flat',supplyCharge:0.8500,usageRate:0.0300,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.14,evRate:0.0300,states:['NSW','VIC','QLD','SA','ACT'],tags:['ev','solar'],contractMonths:0,promo:'Wholesale',url:'https://www.amber.com.au'},
+  {id:'alinta',retailer:'Alinta Energy',name:'No Frills Saver',type:'flat',supplyCharge:0.8700,usageRate:0.2650,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.05,evRate:null,states:['NSW','VIC','QLD','SA'],tags:[],contractMonths:0,promo:null,url:'https://www.alintaenergy.com.au'},
+  {id:'powershop',retailer:'Powershop',name:'Standard Offer',type:'flat',supplyCharge:0.9100,usageRate:0.2810,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.08,evRate:null,states:['NSW','VIC','QLD'],tags:['solar','wfh'],contractMonths:0,promo:null,url:'https://www.powershop.com.au'},
+  {id:'simply-ev',retailer:'Simply Energy',name:'EV Accelerate',type:'tou',supplyCharge:0.9100,usageRate:null,peakRate:0.3800,offPeakRate:0.1400,shoulderRate:0.2000,fitRate:0.06,evRate:0.0900,states:['VIC','NSW','SA'],tags:['ev'],contractMonths:24,promo:'EV special',url:'https://www.simplyenergy.com.au'},
+  {id:'momentum',retailer:'Momentum Energy',name:'Simply Saver',type:'flat',supplyCharge:0.8900,usageRate:0.2740,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.06,evRate:null,states:['VIC','NSW','QLD','SA'],tags:['solar'],contractMonths:0,promo:null,url:'https://www.momentumenergy.com.au'},
+];
+
+function planAnnualCost(pl){
+  const isTou=document.getElementById('tariffType').value==='tou';
+  const dailyKwh=getDailyKwh();
+  const totalDays=getTotalDays();
+  const annualKwh=dailyKwh*365;
+  const annualSupply=pl.supplyCharge*365;
+  let usageCost;
+  if(pl.type==='tou'){
+    let peakKwh,offKwh,shouKwh;
+    if(isTou){
+      const scale=365/totalDays;
+      peakKwh=((parseFloat(document.getElementById('b1Peak').value)||0)+(parseFloat(document.getElementById('b2Peak').value)||0)+(parseFloat(document.getElementById('b3Peak').value)||0))*scale;
+      offKwh=((parseFloat(document.getElementById('b1OffPeak').value)||0)+(parseFloat(document.getElementById('b2OffPeak').value)||0)+(parseFloat(document.getElementById('b3OffPeak').value)||0))*scale;
+      shouKwh=((parseFloat(document.getElementById('b1Shoulder').value)||0)+(parseFloat(document.getElementById('b2Shoulder').value)||0)+(parseFloat(document.getElementById('b3Shoulder').value)||0))*scale;
+    }else{
+      peakKwh=annualKwh*(flags.wfh?0.20:0.30);
+      offKwh=annualKwh*(flags.ev?0.50:0.40);
+      shouKwh=annualKwh-(peakKwh+offKwh);
+    }
+    usageCost=(peakKwh*pl.peakRate)+(offKwh*pl.offPeakRate)+(shouKwh*(pl.shoulderRate||pl.offPeakRate));
+  }else{
+    const rate=pl.id==='amber'?0.28:pl.usageRate;
+    usageCost=annualKwh*rate+(pl.id==='amber'?144:0);
+  }
+  const evSaving=(flags.ev&&pl.evRate)?Math.max(0,8*365*((pl.usageRate||pl.offPeakRate||0.25)-pl.evRate)):0;
+  const solarExportAnnual=flags.solar?((parseFloat(document.getElementById('solarExportKwh').value)||0)*(365/totalDays)):0;
+  const solarCredit=(flags.solar&&pl.fitRate)?solarExportAnnual*pl.fitRate:0;
+  return Math.round(annualSupply+usageCost-evSaving-solarCredit);
+}
+
+function profileScore(pl){
+  let s=0;
+  if(flags.ev&&pl.tags.includes('ev'))s+=30;
+  if(flags.solar&&pl.tags.includes('solar'))s+=25;
+  if(flags.wfh&&pl.tags.includes('wfh'))s+=20;
+  return s;
+}
+
+function compare(){
+  const state=document.getElementById('stateSelect').value;
+  const dailyKwh=getDailyKwh();
+  const currentCost=calcCurrentCost();
+  if(!state){showToast('Select a state');return;}
+  if(dailyKwh<=0){showToast('Enter usage data');return;}
+  if(!currentCost){showToast('Enter current plan rates');return;}
+  let plans=PLANS.filter(pl=>pl.states.includes(state)).map(pl=>{
+    const annualCost=planAnnualCost(pl);
+    return{...pl,annualCost,saving:currentCost-annualCost,score:profileScore(pl)};
+  });
+  plans.sort((a,b)=>(b.saving-a.saving)||(b.score-a.score));
+  renderResults(plans.slice(0,5),currentCost,dailyKwh);
+}
+
+function renderResults(plans,currentCost,dailyKwh){
+  const state=document.getElementById('stateSelect').value;
+  const retailer=document.getElementById('currentRetailer').value||'current plan';
+  document.getElementById('resultsPanel').innerHTML=`
+    <div class="disclaimer">Based on <strong>${Math.round(dailyKwh)} kWh/day</strong> in <strong>${state}</strong>. Current plan (<strong>${retailer}</strong>) est. <strong>$${currentCost.toLocaleString()}/yr</strong>. Verify on <a href="https://www.energymadeeasy.gov.au" target="_blank">energymadeeasy.gov.au</a> before switching.</div>
+    <div class="results-top"><div class="results-title">Top 5 plans — by savings</div><div class="results-meta">Best saving first</div></div>
+    ${plans.map((pl,i)=>renderPlan(pl,i,currentCost)).join('')}`;
+}
+
+function renderPlan(pl,rank,currentCost){
+  const savingClass=pl.saving>=0?'saving-positive':'saving-negative';
+  const savingSign=pl.saving>=0?'+':'';
+  const rankLabels=['⭐ Best saver','2nd best','3rd place'];
+  const rankClasses=['rank-1','rank-2','rank-3'];
+  const isTou=document.getElementById('tariffType').value==='tou';
+  const currentFlatRate=parseFloat(document.getElementById('flatRate').value)||0;
+  const currentSupply=parseFloat(isTou?document.getElementById('supplyChargeTou').value:document.getElementById('supplyCharge').value)||0;
+  const planSupplyCents=(pl.supplyCharge*100).toFixed(1);
+  const supplyDiff=pl.supplyCharge*100-currentSupply;
+  const tagHtml=[
+    pl.tags.includes('ev')&&flags.ev?'<span class="offer-tag tag-ev">🚗 EV tariff</span>':'',
+    pl.tags.includes('solar')&&flags.solar?'<span class="offer-tag tag-solar">☀️ Solar FiT</span>':'',
+    pl.tags.includes('wfh')&&flags.wfh?'<span class="offer-tag tag-wfh">💻 WFH-friendly</span>':'',
+    pl.contractMonths>0?`<span class="offer-tag tag-contract">📅 ${pl.contractMonths}mo contract</span>`:'<span class="offer-tag tag-contract">📅 No lock-in</span>',
+    pl.promo?`<span class="offer-tag tag-promo">🎁 ${pl.promo}</span>`:'',
+  ].filter(Boolean).join('');
+  const rateBoxes=pl.type==='tou'?`
+    <div class="rate-box"><div class="rate-box-label">Peak</div><div class="rate-box-value">${(pl.peakRate*100).toFixed(1)}c</div></div>
+    <div class="rate-box"><div class="rate-box-label">Off-peak</div><div class="rate-box-value">${(pl.offPeakRate*100).toFixed(1)}c</div></div>
+    <div class="rate-box"><div class="rate-box-label">Shoulder</div><div class="rate-box-value">${pl.shoulderRate?(pl.shoulderRate*100).toFixed(1)+'c':'—'}</div></div>
+    <div class="rate-box"><div class="rate-box-label">Supply/day</div><div class="rate-box-value">${planSupplyCents}c<div class="rate-box-vs ${supplyDiff<=0?'rate-better':'rate-worse'}">${supplyDiff<=0?'▼':'▲'}${Math.abs(supplyDiff).toFixed(1)}c</div></div></div>`:`
+    <div class="rate-box"><div class="rate-box-label">Usage rate</div><div class="rate-box-value">${(pl.usageRate*100).toFixed(1)}c<div class="rate-box-vs ${pl.usageRate*100<=currentFlatRate?'rate-better':'rate-worse'}">${pl.usageRate*100<=currentFlatRate?'▼':'▲'}${Math.abs(pl.usageRate*100-currentFlatRate).toFixed(1)}c</div></div></div>
+    <div class="rate-box"><div class="rate-box-label">Supply/day</div><div class="rate-box-value">${planSupplyCents}c<div class="rate-box-vs ${supplyDiff<=0?'rate-better':'rate-worse'}">${supplyDiff<=0?'▼':'▲'}${Math.abs(supplyDiff).toFixed(1)}c</div></div></div>
+    <div class="rate-box"><div class="rate-box-label">Feed-in</div><div class="rate-box-value">${pl.fitRate?(pl.fitRate*100).toFixed(1)+'c':'—'}</div></div>
+    <div class="rate-box"><div class="rate-box-label">EV rate</div><div class="rate-box-value">${pl.evRate?(pl.evRate*100).toFixed(1)+'c':'—'}</div></div>`;
+  return`<div class="plan-card ${rank===0?'best':rank===1?'second':''}">
+    ${rankClasses[rank]?`<div class="rank-badge ${rankClasses[rank]}">${rankLabels[rank]}</div>`:''}
+    <div class="plan-top">
+      <div><div class="plan-retailer">${pl.retailer}</div><div class="plan-name">${pl.name}</div><div class="plan-type-tag">${pl.type==='tou'?'Time of use':'Flat rate'}</div></div>
+      <div class="saving-block">
+        <div class="saving-amount ${savingClass}">${savingSign}$${Math.abs(pl.saving).toLocaleString()}</div>
+        <div class="saving-label">${pl.saving>=0?'saved per year':'more per year'}</div>
+        <div class="plan-annual">$${pl.annualCost.toLocaleString()}/yr total</div>
+      </div>
+    </div>
+    <div class="rate-grid">${rateBoxes}</div>
+    <div class="offer-row">${tagHtml}</div>
+    <div class="plan-actions">
+      <button class="btn-select" id="sel-${pl.id}" onclick="selectPlan('${pl.id}','${pl.retailer}','${pl.name}',${pl.annualCost},${pl.saving})">Select this plan</button>
+      <a class="btn-view" href="${pl.url}" target="_blank">View plan ↗</a>
+    </div>
+  </div>`;
+}
+
+let selectedPlanId=null;
+function selectPlan(id,retailer,name,cost,saving){
+  selectedPlanId=id;
+  document.querySelectorAll('.btn-select').forEach(b=>{b.classList.remove('selected');b.textContent='Select this plan';});
+  const btn=document.getElementById('sel-'+id);
+  if(btn){btn.classList.add('selected');btn.textContent='✓ Selected';}
+  const s=document.getElementById('selectedSummary');
+  s.classList.add('show');
+  s.innerHTML=`<div class="selected-summary-title">✓ Selected: ${retailer} — ${name}</div><div class="selected-summary-detail">Est. $${cost.toLocaleString()}/yr · ${saving>=0?'Saving $'+Math.abs(saving).toLocaleString()+'/yr vs current plan':'$'+Math.abs(saving).toLocaleString()+'/yr more than current'}</div>`;
+  showToast('✓ '+retailer+' '+name+' selected');
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+</script>
+</body>
+</html>
