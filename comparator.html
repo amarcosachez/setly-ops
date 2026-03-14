@@ -199,6 +199,135 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// ── Supabase credentials (entered at runtime) ──────────────────────────
+const SUPA_URL = 'https://dlqijgvqgpbliebresys.supabase.co';
+let SUPA_ANON_KEY = '';
+let PLANS = [];
+
+// ── Credential gate ────────────────────────────────────────────────────
+(function(){
+  const overlay = document.createElement('div');
+  overlay.id = 'credOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(26,26,26,0.85);z-index:999;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `<div style="background:#fff;border-radius:20px;padding:36px;width:420px;max-width:90vw;">
+    <div style="font-family:Fredoka,sans-serif;font-size:22px;font-weight:700;margin-bottom:6px;">Set<span style="color:#FF3D9A">ly</span> Comparator</div>
+    <div style="font-size:13px;color:rgba(26,26,26,0.5);margin-bottom:20px;">Enter your Supabase anon key to load live plans</div>
+    <input id="credInput" type="password" placeholder="eyJ..." style="width:100%;padding:10px 13px;border:1.5px solid rgba(26,26,26,0.12);border-radius:10px;font-size:13px;outline:none;margin-bottom:14px;font-family:monospace;">
+    <button onclick="initWithKey()" style="width:100%;padding:12px;background:#FF3D9A;color:white;border:none;border-radius:12px;font-family:Fredoka,sans-serif;font-size:16px;font-weight:700;cursor:pointer;">Load plans ⚡</button>
+    <div id="credErr" style="font-size:12px;color:#FF3D9A;margin-top:10px;display:none;"></div>
+  </div>`;
+  document.body.appendChild(overlay);
+})();
+
+async function initWithKey(){
+  const key = document.getElementById('credInput').value.trim();
+  if(!key){ showCredErr('Paste your anon key'); return; }
+  SUPA_ANON_KEY = key;
+  showCredErr('Loading plans…', '#888');
+  try {
+    await loadPlans();
+    document.getElementById('credOverlay').remove();
+  } catch(e) {
+    SUPA_ANON_KEY = '';
+    showCredErr('Could not load plans — check key and try again');
+  }
+}
+function showCredErr(msg, color='#FF3D9A'){
+  const el = document.getElementById('credErr');
+  el.style.display='block'; el.style.color=color; el.textContent=msg;
+}
+
+// ── Fetch & transform plans from Supabase ──────────────────────────────
+async function loadPlans(){
+  const res = await fetch(`${SUPA_URL}/rest/v1/plans?select=plan_id,retailer,plan_name,plan_type,raw&is_market_offer=eq.true&fuel_type=eq.ELECTRICITY&order=retailer`, {
+    headers: { 'apikey': SUPA_ANON_KEY, 'Authorization': `Bearer ${SUPA_ANON_KEY}` }
+  });
+  if(!res.ok) throw new Error('Fetch failed: '+res.status);
+  const rows = await res.json();
+  PLANS = rows.map(extractPlan).filter(pl => pl.supplyCharge != null);
+  showToast(`✓ ${PLANS.length} plans loaded`);
+}
+
+const RETAILER_LABELS = {
+  'agl':'AGL','origin':'Origin Energy','energyaustralia':'EnergyAustralia',
+  'alinta':'Alinta Energy','red-energy':'Red Energy','powershop':'Powershop',
+  'globird':'GloBird Energy','kogan':'Kogan Energy','nectr':'Nectr','flipped':'Flipped Energy'
+};
+
+function extractPlan(row){
+  const raw = typeof row.raw === 'string' ? JSON.parse(row.raw) : (row.raw || {});
+  const contract = raw.electricityContract || {};
+  const pricing = contract.pricingModel || 'SINGLE_RATE';
+  const tariffPeriods = contract.tariffPeriod || [];
+
+  let supplyCharge = null, usageRate = null, peakRate = null, offPeakRate = null, shoulderRate = null;
+
+  for(const tp of tariffPeriods){
+    if(tp.dailySupplyCharge != null){ supplyCharge = parseFloat(tp.dailySupplyCharge); break; }
+  }
+
+  if(pricing === 'SINGLE_RATE'){
+    for(const tp of tariffPeriods){
+      if(tp.singleRates && tp.singleRates.rates && tp.singleRates.rates[0]){
+        usageRate = parseFloat(tp.singleRates.rates[0].unitPrice); break;
+      }
+    }
+  } else {
+    for(const tp of tariffPeriods){
+      if(!tp.timeOfUseRates) continue;
+      for(const tou of tp.timeOfUseRates){
+        const r = tou.rates && tou.rates[0] ? parseFloat(tou.rates[0].unitPrice) : null;
+        if(r == null) continue;
+        if(tou.type==='PEAK' && peakRate==null) peakRate=r;
+        else if(tou.type==='OFF_PEAK' && offPeakRate==null) offPeakRate=r;
+        else if(tou.type==='SHOULDER' && shoulderRate==null) shoulderRate=r;
+      }
+    }
+    if(peakRate==null){
+      for(const tp of tariffPeriods){
+        if(tp.singleRates && tp.singleRates.rates && tp.singleRates.rates[0]){
+          usageRate = parseFloat(tp.singleRates.rates[0].unitPrice); break;
+        }
+      }
+    }
+  }
+
+  let fitRate = null;
+  for(const fit of (contract.solarFeedInTariff||[])){
+    if(fit.tariffUType==='singleTariff' && fit.singleTariff && fit.singleTariff.rates){
+      const r = fit.singleTariff.rates.find(x=>x.unitPrice!=null);
+      if(r){ fitRate=parseFloat(r.unitPrice); break; }
+    }
+  }
+
+  const isTou = pricing==='TIME_OF_USE' && (peakRate!=null || offPeakRate!=null);
+  const tags = [];
+  if(fitRate && fitRate>0) tags.push('solar');
+
+  const retailerKey = (row.retailer||'').toLowerCase();
+  const retailerLabel = RETAILER_LABELS[retailerKey] || row.retailer || retailerKey;
+
+  return {
+    id: row.plan_id,
+    retailer: retailerLabel,
+    name: row.plan_name,
+    type: isTou ? 'tou' : 'flat',
+    supplyCharge,
+    usageRate,
+    peakRate,
+    offPeakRate,
+    shoulderRate,
+    fitRate,
+    evRate: null,
+    states: ['NSW'],
+    tags,
+    contractMonths: contract.isFixed ? 12 : 0,
+    promo: null,
+    url: `https://www.energymadeeasy.gov.au/plan?id=${encodeURIComponent(row.plan_id)}&postcode=2000`
+  };
+}
+
+// ── URL params & init ──────────────────────────────────────────────────
 const p = new URLSearchParams(window.location.search);
 const userName=p.get('name')||'';
 const userState=p.get('state')||'';
@@ -299,20 +428,7 @@ function updateCurrentCost(){
   }else{box.style.display='none';}
 }
 
-const PLANS=[
-  {id:'agl-saver',retailer:'AGL',name:'Residential Saver',type:'flat',supplyCharge:0.9372,usageRate:0.2969,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.05,evRate:null,states:['NSW','VIC','QLD','SA'],tags:[],contractMonths:0,promo:null,url:'https://www.agl.com.au/residential/energy/electricity'},
-  {id:'agl-tou',retailer:'AGL',name:'Time Saver (ToU)',type:'tou',supplyCharge:0.9372,usageRate:null,peakRate:0.3980,offPeakRate:0.1650,shoulderRate:0.2200,fitRate:0.05,evRate:0.1200,states:['NSW','VIC','QLD','SA'],tags:['ev','wfh'],contractMonths:0,promo:null,url:'https://www.agl.com.au/residential/energy/electricity'},
-  {id:'origin-basic',retailer:'Origin Energy',name:'Basic Plan',type:'flat',supplyCharge:0.9200,usageRate:0.2890,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.05,evRate:null,states:['NSW','VIC','QLD','SA','ACT','TAS'],tags:[],contractMonths:0,promo:null,url:'https://www.originenergy.com.au'},
-  {id:'origin-solar',retailer:'Origin Energy',name:'Solar Boost',type:'flat',supplyCharge:0.9200,usageRate:0.2950,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.12,evRate:null,states:['NSW','VIC','QLD','SA','ACT'],tags:['solar'],contractMonths:0,promo:'High FiT',url:'https://www.originenergy.com.au/solar'},
-  {id:'ea-flexi',retailer:'EnergyAustralia',name:'Flexi Plan',type:'flat',supplyCharge:0.9700,usageRate:0.2780,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.06,evRate:null,states:['NSW','VIC','QLD','SA','ACT'],tags:[],contractMonths:12,promo:'12% disc.',url:'https://www.energyaustralia.com.au'},
-  {id:'ea-tou',retailer:'EnergyAustralia',name:'Total Plan Plus (ToU)',type:'tou',supplyCharge:0.9700,usageRate:null,peakRate:0.4200,offPeakRate:0.1550,shoulderRate:0.2100,fitRate:0.07,evRate:0.1100,states:['NSW','VIC','QLD','SA'],tags:['ev','wfh'],contractMonths:12,promo:null,url:'https://www.energyaustralia.com.au'},
-  {id:'red-energy',retailer:'Red Energy',name:'Living Energy Saver',type:'flat',supplyCharge:0.8800,usageRate:0.2720,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.07,evRate:null,states:['NSW','VIC','QLD','SA','ACT'],tags:['solar'],contractMonths:0,promo:null,url:'https://www.redenergy.com.au'},
-  {id:'amber',retailer:'Amber Electric',name:'Wholesale Rate',type:'flat',supplyCharge:0.8500,usageRate:0.0300,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.14,evRate:0.0300,states:['NSW','VIC','QLD','SA','ACT'],tags:['ev','solar'],contractMonths:0,promo:'Wholesale',url:'https://www.amber.com.au'},
-  {id:'alinta',retailer:'Alinta Energy',name:'No Frills Saver',type:'flat',supplyCharge:0.8700,usageRate:0.2650,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.05,evRate:null,states:['NSW','VIC','QLD','SA'],tags:[],contractMonths:0,promo:null,url:'https://www.alintaenergy.com.au'},
-  {id:'powershop',retailer:'Powershop',name:'Standard Offer',type:'flat',supplyCharge:0.9100,usageRate:0.2810,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.08,evRate:null,states:['NSW','VIC','QLD'],tags:['solar','wfh'],contractMonths:0,promo:null,url:'https://www.powershop.com.au'},
-  {id:'simply-ev',retailer:'Simply Energy',name:'EV Accelerate',type:'tou',supplyCharge:0.9100,usageRate:null,peakRate:0.3800,offPeakRate:0.1400,shoulderRate:0.2000,fitRate:0.06,evRate:0.0900,states:['VIC','NSW','SA'],tags:['ev'],contractMonths:24,promo:'EV special',url:'https://www.simplyenergy.com.au'},
-  {id:'momentum',retailer:'Momentum Energy',name:'Simply Saver',type:'flat',supplyCharge:0.8900,usageRate:0.2740,peakRate:null,offPeakRate:null,shoulderRate:null,fitRate:0.06,evRate:null,states:['VIC','NSW','QLD','SA'],tags:['solar'],contractMonths:0,promo:null,url:'https://www.momentumenergy.com.au'},
-];
+// PLANS loaded dynamically from Supabase (see loadPlans() above)
 
 function planAnnualCost(pl){
   const isTou=document.getElementById('tariffType').value==='tou';
@@ -355,6 +471,7 @@ function compare(){
   const state=document.getElementById('stateSelect').value;
   const dailyKwh=getDailyKwh();
   const currentCost=calcCurrentCost();
+  if(!PLANS.length){showToast('Plans still loading…');return;}
   if(!state){showToast('Select a state');return;}
   if(dailyKwh<=0){showToast('Enter usage data');return;}
   if(!currentCost){showToast('Enter current plan rates');return;}
