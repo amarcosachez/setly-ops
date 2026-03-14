@@ -199,43 +199,10 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Supabase credentials (entered at runtime) ──────────────────────────
+// ── Supabase credentials ───────────────────────────────────────────────
 const SUPA_URL = 'https://dlqijgvqgpbliebresys.supabase.co';
-let SUPA_ANON_KEY = '';
+const SUPA_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRscWlqZ3ZxZ3BibGllYnJlc3lzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMjA2ODksImV4cCI6MjA4ODY5NjY4OX0.afhun-xkkPYQELQcRQcsLudi3EPviaz-vtiWgPYUKNg';
 let PLANS = [];
-
-// ── Credential gate ────────────────────────────────────────────────────
-(function(){
-  const overlay = document.createElement('div');
-  overlay.id = 'credOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(26,26,26,0.85);z-index:999;display:flex;align-items:center;justify-content:center;';
-  overlay.innerHTML = `<div style="background:#fff;border-radius:20px;padding:36px;width:420px;max-width:90vw;">
-    <div style="font-family:Fredoka,sans-serif;font-size:22px;font-weight:700;margin-bottom:6px;">Set<span style="color:#FF3D9A">ly</span> Comparator</div>
-    <div style="font-size:13px;color:rgba(26,26,26,0.5);margin-bottom:20px;">Enter your Supabase anon key to load live plans</div>
-    <input id="credInput" type="password" placeholder="eyJ..." style="width:100%;padding:10px 13px;border:1.5px solid rgba(26,26,26,0.12);border-radius:10px;font-size:13px;outline:none;margin-bottom:14px;font-family:monospace;">
-    <button onclick="initWithKey()" style="width:100%;padding:12px;background:#FF3D9A;color:white;border:none;border-radius:12px;font-family:Fredoka,sans-serif;font-size:16px;font-weight:700;cursor:pointer;">Load plans ⚡</button>
-    <div id="credErr" style="font-size:12px;color:#FF3D9A;margin-top:10px;display:none;"></div>
-  </div>`;
-  document.body.appendChild(overlay);
-})();
-
-async function initWithKey(){
-  const key = document.getElementById('credInput').value.trim();
-  if(!key){ showCredErr('Paste your anon key'); return; }
-  SUPA_ANON_KEY = key;
-  showCredErr('Loading plans…', '#888');
-  try {
-    await loadPlans();
-    document.getElementById('credOverlay').remove();
-  } catch(e) {
-    SUPA_ANON_KEY = '';
-    showCredErr('Could not load plans — check key and try again');
-  }
-}
-function showCredErr(msg, color='#FF3D9A'){
-  const el = document.getElementById('credErr');
-  el.style.display='block'; el.style.color=color; el.textContent=msg;
-}
 
 // ── Fetch & transform plans from Supabase ──────────────────────────────
 async function loadPlans(){
@@ -347,7 +314,7 @@ if(userName){
   document.getElementById('userCard').innerHTML=`<div class="user-card" style="margin-bottom:16px;"><div class="avatar">${initials}</div><div><div class="user-name">${userName}</div><div class="user-meta">${userState||'—'} · ${userPost||'—'}</div></div></div>`;
 }
 
-toggleTariffFields();updateCurrentCost();
+toggleTariffFields();updateCurrentCost();loadPlans();
 
 function toggleTariffFields(){
   const isTou=document.getElementById('tariffType').value==='tou';
