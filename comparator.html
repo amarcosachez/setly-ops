@@ -206,7 +206,7 @@ let PLANS = [];
 
 // ── Fetch & transform plans from Supabase ──────────────────────────────
 async function loadPlans(){
-  const res = await fetch(`${SUPA_URL}/rest/v1/plans?select=plan_id,retailer,plan_name,plan_type,raw&is_market_offer=eq.true&fuel_type=eq.ELECTRICITY&order=retailer`, {
+  const res = await fetch(`${SUPA_URL}/rest/v1/plans?select=plan_id,retailer,plan_name,plan_type,raw&order=retailer`, {
     headers: { 'apikey': SUPA_ANON_KEY, 'Authorization': `Bearer ${SUPA_ANON_KEY}` }
   });
   if(!res.ok) throw new Error('Fetch failed: '+res.status);
