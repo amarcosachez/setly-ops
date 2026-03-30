@@ -206,7 +206,7 @@ let PLANS = [];
 
 // ── Fetch & transform plans from Supabase ──────────────────────────────
 async function loadPlans(){
-  const res = await fetch(`${SUPA_URL}/rest/v1/plans?select=plan_id,retailer,plan_name,plan_type,raw&order=retailer`, {
+  const res = await fetch(`${SUPA_URL}/rest/v1/plans?select=plan_id,retailer,plan_name,pricing_model,raw&order=retailer`, {
     headers: { 'apikey': SUPA_ANON_KEY, 'Authorization': `Bearer ${SUPA_ANON_KEY}` }
   });
   if(!res.ok) throw new Error('Fetch failed: '+res.status);
@@ -224,7 +224,7 @@ const RETAILER_LABELS = {
 function extractPlan(row){
   const raw = typeof row.raw === 'string' ? JSON.parse(row.raw) : (row.raw || {});
   const contract = raw.electricityContract || {};
-  const pricing = contract.pricingModel || 'SINGLE_RATE';
+  const pricing = contract.pricingModel || row.pricing_model || 'SINGLE_RATE';
   const tariffPeriods = contract.tariffPeriod || [];
 
   let supplyCharge = null, usageRate = null, peakRate = null, offPeakRate = null, shoulderRate = null;
