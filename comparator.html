@@ -226,7 +226,14 @@ function extractPlan(row){
   const contract = raw.electricityContract || {};
   const pricing = contract.pricingModel || row.plan_type || 'SINGLE_RATE';
   const tariffPeriods = contract.tariffPeriod || [];
-
+  
+ if(tariffPeriods.length > 0){
+    console.log('--- extractPlan debug ---');
+    console.log('plan:', row.plan_name);
+    console.log('pricingModel:', contract.pricingModel);
+    console.log('tariffPeriod[0] keys:', Object.keys(tariffPeriods[0]));
+    console.log('tariffPeriod[0]:', JSON.stringify(tariffPeriods[0], null, 2));
+  }
   let supplyCharge = null, usageRate = null, peakRate = null, offPeakRate = null, shoulderRate = null;
 
   for(const tp of tariffPeriods){
