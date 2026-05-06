@@ -235,6 +235,7 @@ function extractPlan(row){
 
   if(pricing === 'SINGLE_RATE'){
     for(const tp of tariffPeriods){
+      // FIX: was tp.singleRates (typo) — CDR API returns singleRate (singular)
       if(tp.singleRate && tp.singleRate.rates && tp.singleRate.rates[0]){
         usageRate = parseFloat(tp.singleRate.rates[0].unitPrice); break;
       }
@@ -252,6 +253,7 @@ function extractPlan(row){
     }
     if(peakRate==null){
       for(const tp of tariffPeriods){
+        // FIX: was tp.singleRates (typo) — CDR API returns singleRate (singular)
         if(tp.singleRate && tp.singleRate.rates && tp.singleRate.rates[0]){
           usageRate = parseFloat(tp.singleRate.rates[0].unitPrice); break;
         }
@@ -395,8 +397,6 @@ function updateCurrentCost(){
   }else{box.style.display='none';}
 }
 
-// PLANS loaded dynamically from Supabase (see loadPlans() above)
-
 function planAnnualCost(pl){
   const isTou=document.getElementById('tariffType').value==='tou';
   const dailyKwh=getDailyKwh();
@@ -482,7 +482,7 @@ function renderPlan(pl,rank,currentCost){
     <div class="rate-box"><div class="rate-box-label">Off-peak</div><div class="rate-box-value">${(pl.offPeakRate*100).toFixed(1)}c</div></div>
     <div class="rate-box"><div class="rate-box-label">Shoulder</div><div class="rate-box-value">${pl.shoulderRate?(pl.shoulderRate*100).toFixed(1)+'c':'—'}</div></div>
     <div class="rate-box"><div class="rate-box-label">Supply/day</div><div class="rate-box-value">${planSupplyCents}c<div class="rate-box-vs ${supplyDiff<=0?'rate-better':'rate-worse'}">${supplyDiff<=0?'▼':'▲'}${Math.abs(supplyDiff).toFixed(1)}c</div></div></div>`:`
-    <div class="rate-box"><div class="rate-box-label">Usage rate</div><div class="rate-box-value">${(pl.usageRate*100).toFixed(1)}c<div class="rate-box-vs ${pl.usageRate*100<=currentFlatRate?'rate-better':'rate-worse'}">${pl.usageRate*100<=currentFlatRate?'▼':'▲'}${Math.abs(pl.usageRate*100-currentFlatRate).toFixed(1)}c</div></div></div>
+    <div class="rate-box"><div class="rate-box-label">Usage rate</div><div class="rate-box-value">${pl.usageRate!=null?(pl.usageRate*100).toFixed(1)+'c':'—'}<div class="rate-box-vs ${pl.usageRate!=null&&pl.usageRate*100<=currentFlatRate?'rate-better':'rate-worse'}">${pl.usageRate!=null?(pl.usageRate*100<=currentFlatRate?'▼':'▲')+Math.abs(pl.usageRate*100-currentFlatRate).toFixed(1)+'c':''}</div></div></div>
     <div class="rate-box"><div class="rate-box-label">Supply/day</div><div class="rate-box-value">${planSupplyCents}c<div class="rate-box-vs ${supplyDiff<=0?'rate-better':'rate-worse'}">${supplyDiff<=0?'▼':'▲'}${Math.abs(supplyDiff).toFixed(1)}c</div></div></div>
     <div class="rate-box"><div class="rate-box-label">Feed-in</div><div class="rate-box-value">${pl.fitRate?(pl.fitRate*100).toFixed(1)+'c':'—'}</div></div>
     <div class="rate-box"><div class="rate-box-label">EV rate</div><div class="rate-box-value">${pl.evRate?(pl.evRate*100).toFixed(1)+'c':'—'}</div></div>`;
