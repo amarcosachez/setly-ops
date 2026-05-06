@@ -235,8 +235,8 @@ function extractPlan(row){
 
   if(pricing === 'SINGLE_RATE'){
     for(const tp of tariffPeriods){
-      if(tp.singleRates && tp.singleRates.rates && tp.singleRates.rates[0]){
-        usageRate = parseFloat(tp.singleRates.rates[0].unitPrice); break;
+      if(tp.singleRate && tp.singleRate.rates && tp.singleRate.rates[0]){
+        usageRate = parseFloat(tp.singleRate.rates[0].unitPrice); break;
       }
     }
   } else {
@@ -252,8 +252,8 @@ function extractPlan(row){
     }
     if(peakRate==null){
       for(const tp of tariffPeriods){
-        if(tp.singleRates && tp.singleRates.rates && tp.singleRates.rates[0]){
-          usageRate = parseFloat(tp.singleRates.rates[0].unitPrice); break;
+        if(tp.singleRate && tp.singleRate.rates && tp.singleRate.rates[0]){
+          usageRate = parseFloat(tp.singleRate.rates[0].unitPrice); break;
         }
       }
     }
