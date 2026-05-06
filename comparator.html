@@ -141,21 +141,17 @@
 
         <div id="touUsage" style="display:none;">
           <div class="section-label">kWh by time slot — per bill</div>
-
           <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin:8px 0 6px;">Bill 1 (most recent)</div>
           <div class="field-row"><div class="field"><label>Peak kWh</label><input type="number" id="b1Peak" placeholder="e.g. 130" oninput="updateCurrentCost()"/></div><div class="field"><label>Off-peak kWh</label><input type="number" id="b1OffPeak" placeholder="e.g. 280" oninput="updateCurrentCost()"/></div></div>
           <div class="field-row"><div class="field"><label>Shoulder kWh</label><input type="number" id="b1Shoulder" placeholder="e.g. 80" oninput="updateCurrentCost()"/></div><div class="field"><label>Days</label><input type="number" id="b1DTou" placeholder="e.g. 90" oninput="updateCurrentCost()"/></div></div>
-
           <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin:12px 0 6px;">Bill 2</div>
           <div class="field-row"><div class="field"><label>Peak kWh</label><input type="number" id="b2Peak" placeholder="e.g. 120" oninput="updateCurrentCost()"/></div><div class="field"><label>Off-peak kWh</label><input type="number" id="b2OffPeak" placeholder="e.g. 260" oninput="updateCurrentCost()"/></div></div>
           <div class="field-row"><div class="field"><label>Shoulder kWh</label><input type="number" id="b2Shoulder" placeholder="e.g. 70" oninput="updateCurrentCost()"/></div><div class="field"><label>Days</label><input type="number" id="b2DTou" placeholder="e.g. 92" oninput="updateCurrentCost()"/></div></div>
-
           <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.6px;margin:12px 0 6px;">Bill 3</div>
           <div class="field-row"><div class="field"><label>Peak kWh</label><input type="number" id="b3Peak" placeholder="e.g. 140" oninput="updateCurrentCost()"/></div><div class="field"><label>Off-peak kWh</label><input type="number" id="b3OffPeak" placeholder="e.g. 310" oninput="updateCurrentCost()"/></div></div>
           <div class="field-row"><div class="field"><label>Shoulder kWh</label><input type="number" id="b3Shoulder" placeholder="e.g. 90" oninput="updateCurrentCost()"/></div><div class="field"><label>Days</label><input type="number" id="b3DTou" placeholder="e.g. 88" oninput="updateCurrentCost()"/></div></div>
         </div>
 
-        <!-- Demand charge (optional) -->
         <div style="margin-top:12px;padding:14px 16px;background:rgba(201,184,255,0.12);border-radius:12px;border:1px solid rgba(201,184,255,0.35);">
           <div style="font-size:12px;font-weight:700;color:#6b52d1;margin-bottom:2px;">⚡ Demand charge <span style="font-weight:500;color:var(--muted);">(optional)</span></div>
           <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Only some plans in VIC/QLD have this. It's the charge per kW of peak demand, usually labelled "[Month] Demand (normalised for 30 days)" on your bill. If your plan doesn't have it, leave blank.</div>
@@ -224,63 +220,48 @@ const RETAILER_LABELS = {
 function extractPlan(row){
   const raw = typeof row.raw === 'string' ? JSON.parse(row.raw) : (row.raw || {});
   const contract = raw.electricityContract || {};
-  const pricing = contract.pricingModel || row.plan_type || 'SINGLE_RATE';
   const tariffPeriods = contract.tariffPeriod || [];
-  
- if(tariffPeriods.length > 0){
-    console.log('--- extractPlan debug ---');
-    console.log('plan:', row.plan_name);
-    console.log('pricingModel:', contract.pricingModel);
-    console.log('tariffPeriod[0] keys:', Object.keys(tariffPeriods[0]));
-    console.log('tariffPeriod[0]:', JSON.stringify(tariffPeriods[0], null, 2));
-  }
+
   let supplyCharge = null, usageRate = null, peakRate = null, offPeakRate = null, shoulderRate = null;
 
+  // Extract supply charge from first period that has it
   for(const tp of tariffPeriods){
     if(tp.dailySupplyCharge != null){ supplyCharge = parseFloat(tp.dailySupplyCharge); break; }
   }
 
-  if(pricing === 'SINGLE_RATE'){
-    for(const tp of tariffPeriods){
-      // FIX: was tp.singleRates (typo) — CDR API returns singleRate (singular)
-      if(tp.singleRate && tp.singleRate.rates && tp.singleRate.rates[0]){
-        usageRate = parseFloat(tp.singleRate.rates[0].unitPrice); break;
+  // Use rateBlockUType as the discriminator per the CDR spec
+  for(const tp of tariffPeriods){
+    const blockType = tp.rateBlockUType;
+
+    if(blockType === 'singleRate'){
+      if(tp.singleRate?.rates?.[0]){
+        usageRate = parseFloat(tp.singleRate.rates[0].unitPrice);
       }
-    }
-  } else {
-    for(const tp of tariffPeriods){
-      if(!tp.timeOfUseRates) continue;
-      for(const tou of tp.timeOfUseRates){
-        const r = tou.rates && tou.rates[0] ? parseFloat(tou.rates[0].unitPrice) : null;
+    } else if(blockType === 'timeOfUseRates'){
+      for(const tou of (tp.timeOfUseRates || [])){
+        const r = tou.rates?.[0] ? parseFloat(tou.rates[0].unitPrice) : null;
         if(r == null) continue;
-        if(tou.type==='PEAK' && peakRate==null) peakRate=r;
-        else if(tou.type==='OFF_PEAK' && offPeakRate==null) offPeakRate=r;
-        else if(tou.type==='SHOULDER' && shoulderRate==null) shoulderRate=r;
-      }
-    }
-    if(peakRate==null){
-      for(const tp of tariffPeriods){
-        // FIX: was tp.singleRates (typo) — CDR API returns singleRate (singular)
-        if(tp.singleRate && tp.singleRate.rates && tp.singleRate.rates[0]){
-          usageRate = parseFloat(tp.singleRate.rates[0].unitPrice); break;
-        }
+        if(tou.type === 'PEAK'     && peakRate    == null) peakRate    = r;
+        else if(tou.type === 'OFF_PEAK'  && offPeakRate == null) offPeakRate = r;
+        else if(tou.type === 'SHOULDER'  && shoulderRate == null) shoulderRate = r;
       }
     }
   }
 
+  // Solar feed-in
   let fitRate = null;
-  for(const fit of (contract.solarFeedInTariff||[])){
-    if(fit.tariffUType==='singleTariff' && fit.singleTariff && fit.singleTariff.rates){
-      const r = fit.singleTariff.rates.find(x=>x.unitPrice!=null);
-      if(r){ fitRate=parseFloat(r.unitPrice); break; }
+  for(const fit of (contract.solarFeedInTariff || [])){
+    if(fit.tariffUType === 'singleTariff' && fit.singleTariff?.rates){
+      const r = fit.singleTariff.rates.find(x => x.unitPrice != null);
+      if(r){ fitRate = parseFloat(r.unitPrice); break; }
     }
   }
 
-  const isTou = pricing==='TIME_OF_USE' && (peakRate!=null || offPeakRate!=null);
-  const tags = [];
-  if(fitRate && fitRate>0) tags.push('solar');
+  const isTou = (peakRate != null || offPeakRate != null);
+  const tags  = [];
+  if(fitRate && fitRate > 0) tags.push('solar');
 
-  const retailerKey = (row.retailer||'').toLowerCase();
+  const retailerKey   = (row.retailer || '').toLowerCase();
   const retailerLabel = RETAILER_LABELS[retailerKey] || row.retailer || retailerKey;
 
   return {
@@ -305,201 +286,218 @@ function extractPlan(row){
 
 // ── URL params & init ──────────────────────────────────────────────────
 const p = new URLSearchParams(window.location.search);
-const userName=p.get('name')||'';
-const userState=p.get('state')||'';
-const userPost=p.get('postcode')||'';
+const userName = p.get('name')     || '';
+const userState = p.get('state')   || '';
+const userPost  = p.get('postcode')|| '';
 
-if(userState) document.getElementById('stateSelect').value=userState;
+if(userState) document.getElementById('stateSelect').value = userState;
 
-const flags={ev:p.get('ev')==='true',solar:p.get('solar')==='true',wfh:p.get('wfh')==='true'};
-['ev','solar','wfh'].forEach(f=>{if(flags[f])document.getElementById('tog-'+f).classList.add('on')});
-if(flags.solar)document.getElementById('solarSection').style.display='block';
+const flags = { ev: p.get('ev')==='true', solar: p.get('solar')==='true', wfh: p.get('wfh')==='true' };
+['ev','solar','wfh'].forEach(f => { if(flags[f]) document.getElementById('tog-'+f).classList.add('on'); });
+if(flags.solar) document.getElementById('solarSection').style.display = 'block';
 
-[['b1k','bill1Kwh'],['b1d','bill1Days'],['b2k','bill2Kwh'],['b2d','bill2Days'],['b3k','bill3Kwh'],['b3d','bill3Days']].forEach(([id,param])=>{const v=p.get(param);if(v)document.getElementById(id).value=v;});
-if(p.get('solarExportKwh'))document.getElementById('solarExportKwh').value=p.get('solarExportKwh');
+[['b1k','bill1Kwh'],['b1d','bill1Days'],['b2k','bill2Kwh'],['b2d','bill2Days'],['b3k','bill3Kwh'],['b3d','bill3Days']].forEach(([id,param]) => {
+  const v = p.get(param); if(v) document.getElementById(id).value = v;
+});
+if(p.get('solarExportKwh')) document.getElementById('solarExportKwh').value = p.get('solarExportKwh');
 
 if(userName){
-  const initials=userName.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
-  document.getElementById('userCard').innerHTML=`<div class="user-card" style="margin-bottom:16px;"><div class="avatar">${initials}</div><div><div class="user-name">${userName}</div><div class="user-meta">${userState||'—'} · ${userPost||'—'}</div></div></div>`;
+  const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('userCard').innerHTML = `<div class="user-card" style="margin-bottom:16px;"><div class="avatar">${initials}</div><div><div class="user-name">${userName}</div><div class="user-meta">${userState||'—'} · ${userPost||'—'}</div></div></div>`;
 }
 
-toggleTariffFields();updateCurrentCost();loadPlans();
+toggleTariffFields(); updateCurrentCost(); loadPlans();
 
 function toggleTariffFields(){
-  const isTou=document.getElementById('tariffType').value==='tou';
-  document.getElementById('flatFields').style.display=isTou?'none':'block';
-  document.getElementById('touFields').style.display=isTou?'block':'none';
-  document.getElementById('flatUsage').style.display=isTou?'none':'block';
-  document.getElementById('touUsage').style.display=isTou?'block':'none';
+  const isTou = document.getElementById('tariffType').value === 'tou';
+  document.getElementById('flatFields').style.display = isTou ? 'none' : 'block';
+  document.getElementById('touFields').style.display  = isTou ? 'block' : 'none';
+  document.getElementById('flatUsage').style.display  = isTou ? 'none' : 'block';
+  document.getElementById('touUsage').style.display   = isTou ? 'block' : 'none';
   updateCurrentCost();
 }
 
 function toggleFlag(f){
-  flags[f]=!flags[f];
-  document.getElementById('tog-'+f).classList.toggle('on',flags[f]);
-  if(f==='solar')document.getElementById('solarSection').style.display=flags.solar?'block':'none';
+  flags[f] = !flags[f];
+  document.getElementById('tog-'+f).classList.toggle('on', flags[f]);
+  if(f === 'solar') document.getElementById('solarSection').style.display = flags.solar ? 'block' : 'none';
   updateCurrentCost();
 }
 
 function getDailyKwh(){
-  const isTou=document.getElementById('tariffType').value==='tou';
+  const isTou = document.getElementById('tariffType').value === 'tou';
   if(isTou){
-    const totalKwh=
+    const totalKwh =
       (parseFloat(document.getElementById('b1Peak').value)||0)+(parseFloat(document.getElementById('b1OffPeak').value)||0)+(parseFloat(document.getElementById('b1Shoulder').value)||0)+
       (parseFloat(document.getElementById('b2Peak').value)||0)+(parseFloat(document.getElementById('b2OffPeak').value)||0)+(parseFloat(document.getElementById('b2Shoulder').value)||0)+
       (parseFloat(document.getElementById('b3Peak').value)||0)+(parseFloat(document.getElementById('b3OffPeak').value)||0)+(parseFloat(document.getElementById('b3Shoulder').value)||0);
-    const totalDays=
+    const totalDays =
       (parseFloat(document.getElementById('b1DTou').value)||0)+
       (parseFloat(document.getElementById('b2DTou').value)||0)+
       (parseFloat(document.getElementById('b3DTou').value)||0);
-    return totalDays>0?totalKwh/totalDays:0;
+    return totalDays > 0 ? totalKwh / totalDays : 0;
   }
-  const bills=[{k:parseFloat(document.getElementById('b1k').value)||0,d:parseFloat(document.getElementById('b1d').value)||0},{k:parseFloat(document.getElementById('b2k').value)||0,d:parseFloat(document.getElementById('b2d').value)||0},{k:parseFloat(document.getElementById('b3k').value)||0,d:parseFloat(document.getElementById('b3d').value)||0}].filter(b=>b.k>0&&b.d>0);
-  if(!bills.length)return 0;
-  return bills.reduce((s,b)=>s+b.k,0)/bills.reduce((s,b)=>s+b.d,0);
+  const bills = [
+    {k:parseFloat(document.getElementById('b1k').value)||0, d:parseFloat(document.getElementById('b1d').value)||0},
+    {k:parseFloat(document.getElementById('b2k').value)||0, d:parseFloat(document.getElementById('b2d').value)||0},
+    {k:parseFloat(document.getElementById('b3k').value)||0, d:parseFloat(document.getElementById('b3d').value)||0}
+  ].filter(b => b.k > 0 && b.d > 0);
+  if(!bills.length) return 0;
+  return bills.reduce((s,b) => s+b.k, 0) / bills.reduce((s,b) => s+b.d, 0);
 }
 
 function getTotalDays(){
-  const isTou=document.getElementById('tariffType').value==='tou';
-  if(isTou)return(
+  const isTou = document.getElementById('tariffType').value === 'tou';
+  if(isTou) return (
     (parseFloat(document.getElementById('b1DTou').value)||0)+
     (parseFloat(document.getElementById('b2DTou').value)||0)+
-    (parseFloat(document.getElementById('b3DTou').value)||0))||270;
-  return[parseFloat(document.getElementById('b1d').value)||0,parseFloat(document.getElementById('b2d').value)||0,parseFloat(document.getElementById('b3d').value)||0].filter(d=>d>0).reduce((s,d)=>s+d,0)||270;
+    (parseFloat(document.getElementById('b3DTou').value)||0)) || 270;
+  return [
+    parseFloat(document.getElementById('b1d').value)||0,
+    parseFloat(document.getElementById('b2d').value)||0,
+    parseFloat(document.getElementById('b3d').value)||0
+  ].filter(d => d > 0).reduce((s,d) => s+d, 0) || 270;
 }
 
 function calcCurrentCost(){
-  const isTou=document.getElementById('tariffType').value==='tou';
-  const dailyKwh=getDailyKwh();
-  if(dailyKwh<=0)return null;
-  const totalDays=getTotalDays();
-  const annualKwh=dailyKwh*365;
+  const isTou    = document.getElementById('tariffType').value === 'tou';
+  const dailyKwh = getDailyKwh();
+  if(dailyKwh <= 0) return null;
+  const totalDays = getTotalDays();
+  const annualKwh = dailyKwh * 365;
   let usageCost;
   if(isTou){
-    const scale=365/totalDays;
-    const peak=((parseFloat(document.getElementById('b1Peak').value)||0)+(parseFloat(document.getElementById('b2Peak').value)||0)+(parseFloat(document.getElementById('b3Peak').value)||0))*scale;
-    const off=((parseFloat(document.getElementById('b1OffPeak').value)||0)+(parseFloat(document.getElementById('b2OffPeak').value)||0)+(parseFloat(document.getElementById('b3OffPeak').value)||0))*scale;
-    const shou=((parseFloat(document.getElementById('b1Shoulder').value)||0)+(parseFloat(document.getElementById('b2Shoulder').value)||0)+(parseFloat(document.getElementById('b3Shoulder').value)||0))*scale;
-    const pRate=(parseFloat(document.getElementById('touPeakRate').value)||0)/100;
-    const oRate=(parseFloat(document.getElementById('touOffPeakRate').value)||0)/100;
-    const sRate=(parseFloat(document.getElementById('touShoulderRate').value)||parseFloat(document.getElementById('touPeakRate').value)||0)/100;
-    const supply=(parseFloat(document.getElementById('supplyChargeTou').value)||0);
-    usageCost=(peak*pRate)+(off*oRate)+(shou*sRate)+(supply*365);
-  }else{
-    const rate=(parseFloat(document.getElementById('flatRate').value)||0)/100;
-    const supply=(parseFloat(document.getElementById('supplyCharge').value)||0);
-    usageCost=(annualKwh*rate)+(supply*365);
+    const scale  = 365 / totalDays;
+    const peak   = ((parseFloat(document.getElementById('b1Peak').value)||0)+(parseFloat(document.getElementById('b2Peak').value)||0)+(parseFloat(document.getElementById('b3Peak').value)||0))*scale;
+    const off    = ((parseFloat(document.getElementById('b1OffPeak').value)||0)+(parseFloat(document.getElementById('b2OffPeak').value)||0)+(parseFloat(document.getElementById('b3OffPeak').value)||0))*scale;
+    const shou   = ((parseFloat(document.getElementById('b1Shoulder').value)||0)+(parseFloat(document.getElementById('b2Shoulder').value)||0)+(parseFloat(document.getElementById('b3Shoulder').value)||0))*scale;
+    const pRate  = (parseFloat(document.getElementById('touPeakRate').value)||0) / 100;
+    const oRate  = (parseFloat(document.getElementById('touOffPeakRate').value)||0) / 100;
+    const sRate  = (parseFloat(document.getElementById('touShoulderRate').value)||parseFloat(document.getElementById('touPeakRate').value)||0) / 100;
+    const supply = parseFloat(document.getElementById('supplyChargeTou').value)||0;
+    usageCost = (peak*pRate) + (off*oRate) + (shou*sRate) + (supply*365);
+  } else {
+    const rate   = (parseFloat(document.getElementById('flatRate').value)||0) / 100;
+    const supply = parseFloat(document.getElementById('supplyCharge').value)||0;
+    usageCost = (annualKwh * rate) + (supply * 365);
   }
-  const solarCredit=flags.solar?((parseFloat(document.getElementById('solarExportKwh').value)||0)*(365/totalDays)*0.07):0;
-  return Math.round(usageCost-solarCredit);
+  const solarCredit = flags.solar ? ((parseFloat(document.getElementById('solarExportKwh').value)||0) * (365/totalDays) * 0.07) : 0;
+  return Math.round(usageCost - solarCredit);
 }
 
 function updateCurrentCost(){
-  const cost=calcCurrentCost();
-  const box=document.getElementById('currentCostBox');
-  if(cost&&cost>0){
-    box.style.display='block';
-    document.getElementById('currentCostValue').textContent='$'+cost.toLocaleString();
-    document.getElementById('currentCostDaily').textContent='~$'+(cost/365).toFixed(2)+'/day · '+Math.round(getDailyKwh())+' kWh/day avg';
-  }else{box.style.display='none';}
+  const cost = calcCurrentCost();
+  const box  = document.getElementById('currentCostBox');
+  if(cost && cost > 0){
+    box.style.display = 'block';
+    document.getElementById('currentCostValue').textContent = '$' + cost.toLocaleString();
+    document.getElementById('currentCostDaily').textContent = '~$'+(cost/365).toFixed(2)+'/day · '+Math.round(getDailyKwh())+' kWh/day avg';
+  } else { box.style.display = 'none'; }
 }
 
 function planAnnualCost(pl){
-  const isTou=document.getElementById('tariffType').value==='tou';
-  const dailyKwh=getDailyKwh();
-  const totalDays=getTotalDays();
-  const annualKwh=dailyKwh*365;
-  const annualSupply=pl.supplyCharge*365;
+  const isTou     = document.getElementById('tariffType').value === 'tou';
+  const dailyKwh  = getDailyKwh();
+  const totalDays = getTotalDays();
+  const annualKwh = dailyKwh * 365;
+  const annualSupply = pl.supplyCharge * 365;
   let usageCost;
-  if(pl.type==='tou'){
-    let peakKwh,offKwh,shouKwh;
+  if(pl.type === 'tou'){
+    let peakKwh, offKwh, shouKwh;
     if(isTou){
-      const scale=365/totalDays;
-      peakKwh=((parseFloat(document.getElementById('b1Peak').value)||0)+(parseFloat(document.getElementById('b2Peak').value)||0)+(parseFloat(document.getElementById('b3Peak').value)||0))*scale;
-      offKwh=((parseFloat(document.getElementById('b1OffPeak').value)||0)+(parseFloat(document.getElementById('b2OffPeak').value)||0)+(parseFloat(document.getElementById('b3OffPeak').value)||0))*scale;
-      shouKwh=((parseFloat(document.getElementById('b1Shoulder').value)||0)+(parseFloat(document.getElementById('b2Shoulder').value)||0)+(parseFloat(document.getElementById('b3Shoulder').value)||0))*scale;
-    }else{
-      peakKwh=annualKwh*(flags.wfh?0.20:0.30);
-      offKwh=annualKwh*(flags.ev?0.50:0.40);
-      shouKwh=annualKwh-(peakKwh+offKwh);
+      const scale = 365 / totalDays;
+      peakKwh = ((parseFloat(document.getElementById('b1Peak').value)||0)+(parseFloat(document.getElementById('b2Peak').value)||0)+(parseFloat(document.getElementById('b3Peak').value)||0))*scale;
+      offKwh  = ((parseFloat(document.getElementById('b1OffPeak').value)||0)+(parseFloat(document.getElementById('b2OffPeak').value)||0)+(parseFloat(document.getElementById('b3OffPeak').value)||0))*scale;
+      shouKwh = ((parseFloat(document.getElementById('b1Shoulder').value)||0)+(parseFloat(document.getElementById('b2Shoulder').value)||0)+(parseFloat(document.getElementById('b3Shoulder').value)||0))*scale;
+    } else {
+      peakKwh = annualKwh * (flags.wfh ? 0.20 : 0.30);
+      offKwh  = annualKwh * (flags.ev  ? 0.50 : 0.40);
+      shouKwh = annualKwh - (peakKwh + offKwh);
     }
-    usageCost=(peakKwh*pl.peakRate)+(offKwh*pl.offPeakRate)+(shouKwh*(pl.shoulderRate||pl.offPeakRate));
-  }else{
-    const rate=pl.id==='amber'?0.28:pl.usageRate;
-    usageCost=annualKwh*rate+(pl.id==='amber'?144:0);
+    usageCost = (peakKwh * pl.peakRate) + (offKwh * pl.offPeakRate) + (shouKwh * (pl.shoulderRate || pl.offPeakRate));
+  } else {
+    usageCost = annualKwh * pl.usageRate;
   }
-  const solarExportAnnual=flags.solar?((parseFloat(document.getElementById('solarExportKwh').value)||0)*(365/totalDays)):0;
-  const solarCredit=(flags.solar&&pl.fitRate)?solarExportAnnual*pl.fitRate:0;
-  return Math.round(annualSupply+usageCost-solarCredit);
+  const solarExportAnnual = flags.solar ? ((parseFloat(document.getElementById('solarExportKwh').value)||0) * (365/totalDays)) : 0;
+  const solarCredit = (flags.solar && pl.fitRate) ? solarExportAnnual * pl.fitRate : 0;
+  return Math.round(annualSupply + usageCost - solarCredit);
 }
 
 function profileScore(pl){
-  let s=0;
-  if(flags.ev&&pl.tags.includes('ev'))s+=30;
-  if(flags.solar&&pl.tags.includes('solar'))s+=25;
-  if(flags.wfh&&pl.tags.includes('wfh'))s+=20;
+  let s = 0;
+  if(flags.ev    && pl.tags.includes('ev'))    s += 30;
+  if(flags.solar && pl.tags.includes('solar')) s += 25;
+  if(flags.wfh   && pl.tags.includes('wfh'))  s += 20;
   return s;
 }
 
 function compare(){
-  const state=document.getElementById('stateSelect').value;
-  const dailyKwh=getDailyKwh();
-  const currentCost=calcCurrentCost();
-  if(!PLANS.length){showToast('Plans still loading…');return;}
-  if(!state){showToast('Select a state');return;}
-  if(dailyKwh<=0){showToast('Enter usage data');return;}
-  if(!currentCost){showToast('Enter current plan rates');return;}
-  let plans=PLANS.filter(pl=>pl.states.includes(state)).map(pl=>{
-    const annualCost=planAnnualCost(pl);
-    return{...pl,annualCost,saving:currentCost-annualCost,score:profileScore(pl)};
+  const state       = document.getElementById('stateSelect').value;
+  const dailyKwh    = getDailyKwh();
+  const currentCost = calcCurrentCost();
+  if(!PLANS.length)  { showToast('Plans still loading…');    return; }
+  if(!state)         { showToast('Select a state');           return; }
+  if(dailyKwh <= 0)  { showToast('Enter usage data');         return; }
+  if(!currentCost)   { showToast('Enter current plan rates'); return; }
+  let plans = PLANS.filter(pl => pl.states.includes(state)).map(pl => {
+    const annualCost = planAnnualCost(pl);
+    return { ...pl, annualCost, saving: currentCost - annualCost, score: profileScore(pl) };
   });
-  plans.sort((a,b)=>(b.saving-a.saving)||(b.score-a.score));
-  renderResults(plans.slice(0,5),currentCost,dailyKwh);
+  plans.sort((a,b) => (b.saving - a.saving) || (b.score - a.score));
+  renderResults(plans.slice(0,5), currentCost, dailyKwh);
 }
 
-function renderResults(plans,currentCost,dailyKwh){
-  const state=document.getElementById('stateSelect').value;
-  const retailer=document.getElementById('currentRetailer').value||'current plan';
-  document.getElementById('resultsPanel').innerHTML=`
+function renderResults(plans, currentCost, dailyKwh){
+  const state    = document.getElementById('stateSelect').value;
+  const retailer = document.getElementById('currentRetailer').value || 'current plan';
+  document.getElementById('resultsPanel').innerHTML = `
     <div class="disclaimer">Based on <strong>${Math.round(dailyKwh)} kWh/day</strong> in <strong>${state}</strong>. Current plan (<strong>${retailer}</strong>) est. <strong>$${currentCost.toLocaleString()}/yr</strong>. Verify on <a href="https://www.energymadeeasy.gov.au" target="_blank">energymadeeasy.gov.au</a> before switching.</div>
     <div class="results-top"><div class="results-title">Top 5 plans — by savings</div><div class="results-meta">Best saving first</div></div>
-    ${plans.map((pl,i)=>renderPlan(pl,i,currentCost)).join('')}`;
+    ${plans.map((pl,i) => renderPlan(pl, i, currentCost)).join('')}`;
 }
 
-function renderPlan(pl,rank,currentCost){
-  const savingClass=pl.saving>=0?'saving-positive':'saving-negative';
-  const savingSign=pl.saving>=0?'+':'';
-  const rankLabels=['⭐ Best saver','2nd best','3rd place'];
-  const rankClasses=['rank-1','rank-2','rank-3'];
-  const isTou=document.getElementById('tariffType').value==='tou';
-  const currentFlatRate=parseFloat(document.getElementById('flatRate').value)||0;
-  const currentSupply=parseFloat(isTou?document.getElementById('supplyChargeTou').value:document.getElementById('supplyCharge').value)||0;
-  const planSupplyCents=(pl.supplyCharge*100).toFixed(1);
-  const currentSupplyCents=currentSupply*100;
-  const supplyDiff=pl.supplyCharge*100-currentSupplyCents;
-  const tagHtml=[
-    pl.tags.includes('ev')&&flags.ev?'<span class="offer-tag tag-ev">🚗 EV tariff</span>':'',
-    pl.tags.includes('solar')&&flags.solar?'<span class="offer-tag tag-solar">☀️ Solar FiT</span>':'',
-    pl.tags.includes('wfh')&&flags.wfh?'<span class="offer-tag tag-wfh">💻 WFH-friendly</span>':'',
-    pl.contractMonths>0?`<span class="offer-tag tag-contract">📅 ${pl.contractMonths}mo contract</span>`:'<span class="offer-tag tag-contract">📅 No lock-in</span>',
-    pl.promo?`<span class="offer-tag tag-promo">🎁 ${pl.promo}</span>`:'',
+function renderPlan(pl, rank, currentCost){
+  const savingClass = pl.saving >= 0 ? 'saving-positive' : 'saving-negative';
+  const savingSign  = pl.saving >= 0 ? '+' : '';
+  const rankLabels  = ['⭐ Best saver','2nd best','3rd place'];
+  const rankClasses = ['rank-1','rank-2','rank-3'];
+  const isTou = document.getElementById('tariffType').value === 'tou';
+  const currentFlatRate    = parseFloat(document.getElementById('flatRate').value) || 0;
+  const currentSupply      = parseFloat(isTou ? document.getElementById('supplyChargeTou').value : document.getElementById('supplyCharge').value) || 0;
+  const planSupplyCents    = (pl.supplyCharge * 100).toFixed(1);
+  const currentSupplyCents = currentSupply * 100;
+  const supplyDiff         = pl.supplyCharge * 100 - currentSupplyCents;
+
+  const tagHtml = [
+    pl.tags.includes('ev')    && flags.ev    ? '<span class="offer-tag tag-ev">🚗 EV tariff</span>'      : '',
+    pl.tags.includes('solar') && flags.solar ? '<span class="offer-tag tag-solar">☀️ Solar FiT</span>'   : '',
+    pl.tags.includes('wfh')   && flags.wfh   ? '<span class="offer-tag tag-wfh">💻 WFH-friendly</span>' : '',
+    pl.contractMonths > 0
+      ? `<span class="offer-tag tag-contract">📅 ${pl.contractMonths}mo contract</span>`
+      : '<span class="offer-tag tag-contract">📅 No lock-in</span>',
+    pl.promo ? `<span class="offer-tag tag-promo">🎁 ${pl.promo}</span>` : '',
   ].filter(Boolean).join('');
-  const rateBoxes=pl.type==='tou'?`
+
+  const usageRateCents = pl.usageRate != null ? (pl.usageRate * 100).toFixed(1) : null;
+  const usageDiff      = pl.usageRate != null ? pl.usageRate * 100 - currentFlatRate : null;
+
+  const rateBoxes = pl.type === 'tou' ? `
     <div class="rate-box"><div class="rate-box-label">Peak</div><div class="rate-box-value">${(pl.peakRate*100).toFixed(1)}c</div></div>
     <div class="rate-box"><div class="rate-box-label">Off-peak</div><div class="rate-box-value">${(pl.offPeakRate*100).toFixed(1)}c</div></div>
-    <div class="rate-box"><div class="rate-box-label">Shoulder</div><div class="rate-box-value">${pl.shoulderRate?(pl.shoulderRate*100).toFixed(1)+'c':'—'}</div></div>
-    <div class="rate-box"><div class="rate-box-label">Supply/day</div><div class="rate-box-value">${planSupplyCents}c<div class="rate-box-vs ${supplyDiff<=0?'rate-better':'rate-worse'}">${supplyDiff<=0?'▼':'▲'}${Math.abs(supplyDiff).toFixed(1)}c</div></div></div>`:`
-    <div class="rate-box"><div class="rate-box-label">Usage rate</div><div class="rate-box-value">${pl.usageRate!=null?(pl.usageRate*100).toFixed(1)+'c':'—'}<div class="rate-box-vs ${pl.usageRate!=null&&pl.usageRate*100<=currentFlatRate?'rate-better':'rate-worse'}">${pl.usageRate!=null?(pl.usageRate*100<=currentFlatRate?'▼':'▲')+Math.abs(pl.usageRate*100-currentFlatRate).toFixed(1)+'c':''}</div></div></div>
+    <div class="rate-box"><div class="rate-box-label">Shoulder</div><div class="rate-box-value">${pl.shoulderRate ? (pl.shoulderRate*100).toFixed(1)+'c' : '—'}</div></div>
+    <div class="rate-box"><div class="rate-box-label">Supply/day</div><div class="rate-box-value">${planSupplyCents}c<div class="rate-box-vs ${supplyDiff<=0?'rate-better':'rate-worse'}">${supplyDiff<=0?'▼':'▲'}${Math.abs(supplyDiff).toFixed(1)}c</div></div></div>` : `
+    <div class="rate-box"><div class="rate-box-label">Usage rate</div><div class="rate-box-value">${usageRateCents != null ? usageRateCents+'c' : '—'}${usageDiff != null ? `<div class="rate-box-vs ${usageDiff<=0?'rate-better':'rate-worse'}">${usageDiff<=0?'▼':'▲'}${Math.abs(usageDiff).toFixed(1)}c</div>` : ''}</div></div>
     <div class="rate-box"><div class="rate-box-label">Supply/day</div><div class="rate-box-value">${planSupplyCents}c<div class="rate-box-vs ${supplyDiff<=0?'rate-better':'rate-worse'}">${supplyDiff<=0?'▼':'▲'}${Math.abs(supplyDiff).toFixed(1)}c</div></div></div>
-    <div class="rate-box"><div class="rate-box-label">Feed-in</div><div class="rate-box-value">${pl.fitRate?(pl.fitRate*100).toFixed(1)+'c':'—'}</div></div>
-    <div class="rate-box"><div class="rate-box-label">EV rate</div><div class="rate-box-value">${pl.evRate?(pl.evRate*100).toFixed(1)+'c':'—'}</div></div>`;
-  return`<div class="plan-card ${rank===0?'best':rank===1?'second':''}">
-    ${rankClasses[rank]?`<div class="rank-badge ${rankClasses[rank]}">${rankLabels[rank]}</div>`:''}
+    <div class="rate-box"><div class="rate-box-label">Feed-in</div><div class="rate-box-value">${pl.fitRate ? (pl.fitRate*100).toFixed(1)+'c' : '—'}</div></div>
+    <div class="rate-box"><div class="rate-box-label">EV rate</div><div class="rate-box-value">${pl.evRate ? (pl.evRate*100).toFixed(1)+'c' : '—'}</div></div>`;
+
+  return `<div class="plan-card ${rank===0?'best':rank===1?'second':''}">
+    ${rankClasses[rank] ? `<div class="rank-badge ${rankClasses[rank]}">${rankLabels[rank]}</div>` : ''}
     <div class="plan-top">
       <div><div class="plan-retailer">${pl.retailer}</div><div class="plan-name">${pl.name}</div><div class="plan-type-tag">${pl.type==='tou'?'Time of use':'Flat rate'}</div></div>
       <div class="saving-block">
         <div class="saving-amount ${savingClass}">${savingSign}$${Math.abs(pl.saving).toLocaleString()}</div>
-        <div class="saving-label">${pl.saving>=0?'saved per year':'more per year'}</div>
+        <div class="saving-label">${pl.saving >= 0 ? 'saved per year' : 'more per year'}</div>
         <div class="plan-annual">$${pl.annualCost.toLocaleString()}/yr total</div>
       </div>
     </div>
@@ -512,22 +510,22 @@ function renderPlan(pl,rank,currentCost){
   </div>`;
 }
 
-let selectedPlanId=null;
-function selectPlan(id,retailer,name,cost,saving){
-  selectedPlanId=id;
-  document.querySelectorAll('.btn-select').forEach(b=>{b.classList.remove('selected');b.textContent='Select this plan';});
-  const btn=document.getElementById('sel-'+id);
-  if(btn){btn.classList.add('selected');btn.textContent='✓ Selected';}
-  const s=document.getElementById('selectedSummary');
+let selectedPlanId = null;
+function selectPlan(id, retailer, name, cost, saving){
+  selectedPlanId = id;
+  document.querySelectorAll('.btn-select').forEach(b => { b.classList.remove('selected'); b.textContent = 'Select this plan'; });
+  const btn = document.getElementById('sel-'+id);
+  if(btn){ btn.classList.add('selected'); btn.textContent = '✓ Selected'; }
+  const s = document.getElementById('selectedSummary');
   s.classList.add('show');
-  s.innerHTML=`<div class="selected-summary-title">✓ Selected: ${retailer} — ${name}</div><div class="selected-summary-detail">Est. $${cost.toLocaleString()}/yr · ${saving>=0?'Saving $'+Math.abs(saving).toLocaleString()+'/yr vs current plan':'$'+Math.abs(saving).toLocaleString()+'/yr more than current'}</div>`;
+  s.innerHTML = `<div class="selected-summary-title">✓ Selected: ${retailer} — ${name}</div><div class="selected-summary-detail">Est. $${cost.toLocaleString()}/yr · ${saving>=0?'Saving $'+Math.abs(saving).toLocaleString()+'/yr vs current plan':'$'+Math.abs(saving).toLocaleString()+'/yr more than current'}</div>`;
   showToast('✓ '+retailer+' '+name+' selected');
 }
 
 function showToast(msg){
-  const t=document.getElementById('toast');
-  t.textContent=msg;t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),2500);
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
 }
 </script>
 </body>
